@@ -95,6 +95,29 @@ static bool IsObject (napi_env env, napi_value value) {
   return type == napi_object;
 }
 
+std::string toString(napi_env& env, const napi_value& from) {
+  size_t size = 0;
+  if (IsString(env, from)) {
+    napi_get_value_string_utf8(env, from, NULL, 0, &size); // TODO(fix): assert(napi_ok)
+    // TODO (perf): How to avoid extra copy?
+    if (size < 4096) {
+      char store[4096];
+      napi_get_value_string_utf8(env, from, store, 4096, &size); // TODO(fix): assert(napi_ok)
+      return std::string(store, size);
+    } else {
+      std::unique_ptr<char[]> store(new char[size + 1]);
+      napi_get_value_string_utf8(env, from, store.get(), size + 1, &size); // TODO(fix): assert(napi_ok)
+      return std::string(store.get(), size);
+    }
+  } else if (IsBuffer(env, from)) {
+    char* data = nullptr;
+    napi_get_buffer_info(env, from, reinterpret_cast<void**>(&data), &size); // TODO(fix): assert(napi_ok)
+    return std::string(data, size);
+  }
+
+  return "";
+}
+
 /**
  * Create an error object.
  */
@@ -259,10 +282,7 @@ static std::optional<std::string> RangeOption (napi_env env, napi_value opts, co
     napi_value value = GetProperty(env, opts, name);
 
     if (StringOrBufferLength(env, value) >= 0) {
-      LD_STRING_OR_BUFFER_TO_COPY(env, value, to);
-      auto str = std::string(toCh_, toSz_);
-      delete[] toCh_;
-      return str;
+      return toString(env, value);
     }
   }
 
@@ -284,9 +304,7 @@ static std::vector<std::string>* KeyArray (napi_env env, napi_value arr) {
 
       if (napi_get_element(env, arr, i, &element) == napi_ok &&
           StringOrBufferLength(env, element) >= 0) {
-        LD_STRING_OR_BUFFER_TO_COPY(env, element, to);
-        result->emplace_back(toCh_, toSz_);
-        delete [] toCh_;
+        result->push_back(toString(env, element));
       }
     }
   }
