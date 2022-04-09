@@ -99,16 +99,10 @@ std::string toString(napi_env& env, const napi_value& from) {
   size_t size = 0;
   if (IsString(env, from)) {
     napi_get_value_string_utf8(env, from, NULL, 0, &size); // TODO(fix): assert(napi_ok)
-    // TODO (perf): How to avoid extra copy?
-    if (size < 4096) {
-      char store[4096];
-      napi_get_value_string_utf8(env, from, store, 4096, &size); // TODO(fix): assert(napi_ok)
-      return std::string(store, size);
-    } else {
-      std::unique_ptr<char[]> store(new char[size + 1]);
-      napi_get_value_string_utf8(env, from, store.get(), size + 1, &size); // TODO(fix): assert(napi_ok)
-      return std::string(store.get(), size);
-    }
+    std::string utf8_str(size, '\0');
+    size_t copied;
+    napi_get_value_string_utf8(env, from, &utf8_str[0], utf8_str.length() + 1, &copied); // TODO(fix): assert(napi_ok)
+    assert(copied == size);
   } else if (IsBuffer(env, from)) {
     char* data = nullptr;
     napi_get_buffer_info(env, from, reinterpret_cast<void**>(&data), &size); // TODO(fix): assert(napi_ok)
